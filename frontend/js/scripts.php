@@ -125,7 +125,7 @@ function atualizarLoan($pdo, $id, $amount, $interest_rate, $months, $start_date,
     $stmt = $pdo->prepare("UPDATE loan SET amount = ?, interest_rate = ?, months = ?, start_date = ?, customer_id = ? WHERE id = ?");
     $sucesso = $stmt->execute([$amount, $interest_rate, $months, $start_date, $customer_id, $id]);
     if ($sucesso) {
-        // Para simplificar, delete todas as parcelas e gere novas
+        // Delete todas as parcelas e gere novas
         deletarParcelasPorLoan($pdo, $id);
         gerarParcelas($pdo, $id, $amount, $interest_rate, $months, $start_date);
     }

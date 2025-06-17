@@ -70,21 +70,20 @@
 
     <hr>
     <h2>📆 Cadastrar Parcela</h2>
+
     <form action="entidades/parcela.php" method="POST">
-        <input type="number" name="month_number" placeholder="Mês" required>
-        <input type="number" step="0.01" name="principal" placeholder="Principal" required>
-        <input type="number" step="0.01" name="interest" placeholder="Juros" required>
-        <input type="number" step="0.01" name="balance" placeholder="Saldo" required>
-        <input type="date" name="due_date" required>
+        <input type="number" step="0.01" name="amount" placeholder="Valor do Empréstimo (R$)" required>
+        <input type="number" step="0.01" name="interest_rate" placeholder="Taxa de Juros Mensal (%)" required>
+        <input type="number" name="months" placeholder="Número de Meses" required>
+        <input type="date" name="start_date" placeholder="Data Inicial" required>
         <select name="loan_id" required>
             <option value="">Empréstimo</option>
             <?php foreach ($loans as $l): ?>
                 <option value="<?= $l['id'] ?>"><?= $l['id'] ?></option>
             <?php endforeach; ?>
         </select>
-        <button type="submit">Cadastrar</button>
+        <button type="submit">Gerar Parcelas</button>
     </form>
-
     <hr>
     <h2>📑 Relatórios</h2>
 <ul>

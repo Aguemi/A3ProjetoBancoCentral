@@ -13,23 +13,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $startDate = new DateTime($startDateStr);
 
-        // Inicializa variáveis
-        $principal = round($amount / $months, 2);
-        $balance = $amount;
+        // Cálculo da parcela fixa (PMT) usando fórmula do sistema PRICE
+        $i = $interestRate;
+        $n = $months;
+        $P = $amount;
+
+        if ($i == 0) {
+            $pmt = round($P / $n, 2);
+        } else {
+            $pmt = round(($P * $i) / (1 - pow(1 + $i, -$n)), 2);
+        }
+
+        $balance = $P;
         $parcelas = [];
 
-        for ($i = 1; $i <= $months; $i++) {
-            $interest = round($balance * $interestRate, 2);
+        for ($month = 1; $month <= $n; $month++) {
+            $interest = round($balance * $i, 2);
+            $amortization = round($pmt - $interest, 2);
+            $balance = round($balance - $amortization, 2);
+
+            // Corrige arredondamento final
+            if ($month === $n && abs($balance) > 0.01) {
+                $amortization += $balance;
+                $balance = 0;
+            }
 
             $dueDate = clone $startDate;
-            $dueDate->modify("+$i month");
+            $dueDate->modify("+$month month");
 
-            $balance = round($balance - $principal, 2);
-            if ($balance < 0) $balance = 0;
+            $total = round($amortization + $interest, 2); // soma correta
 
             $parcelas[] = [
-                'month' => $i,
-                'principal' => $principal,
+                'month' => $month,
+                'installment' => $total,
+                'amortization' => $amortization,
                 'interest' => $interest,
                 'balance' => $balance,
                 'due_date' => $dueDate->format('Y-m-d'),
@@ -42,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Simulador de Parcelas</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; }
@@ -62,16 +79,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <form method="POST" action="">
     <label>Valor do Empréstimo (R$):</label>
-    <input type="number" name="amount" step="0.01" required value="<?= isset($amount) ? htmlspecialchars($amount) : '' ?>">
+    <input type="number" name="amount" step="0.01" required value="<?= isset($amount) ? htmlspecialchars($amount) : '' ?>" />
 
     <label>Taxa de Juros Mensal (%):</label>
-    <input type="number" name="interest_rate" step="0.01" required value="<?= isset($interestRate) ? htmlspecialchars($interestRate * 100) : '' ?>">
+    <input type="number" name="interest_rate" step="0.01" required value="<?= isset($interestRate) ? htmlspecialchars($interestRate * 100) : '' ?>" />
 
     <label>Quantidade de Meses:</label>
-    <input type="number" name="months" required value="<?= isset($months) ? htmlspecialchars($months) : '' ?>">
+    <input type="number" name="months" required value="<?= isset($months) ? htmlspecialchars($months) : '' ?>" />
 
     <label>Data de Início:</label>
-    <input type="date" name="start_date" required value="<?= isset($startDateStr) ? htmlspecialchars($startDateStr) : '' ?>">
+    <input type="date" name="start_date" required value="<?= isset($startDateStr) ? htmlspecialchars($startDateStr) : '' ?>" />
 
     <button type="submit">Simular</button>
 </form>
@@ -83,26 +100,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <?php if (!empty($parcelas)): ?>
     <h2>Parcelas Calculadas</h2>
     <table>
-        <tr>
-            <th>Mês</th>
-            <th>Principal (R$)</th>
-            <th>Juros (R$)</th>
-            <th>Saldo (R$)</th>
-            <th>Vencimento</th>
-            <th>Total a pagar (R$)</th> <!-- nova coluna -->
-        </tr>
-        <?php foreach ($parcelas as $p): 
-            $total = $p['principal'] + $p['interest'];
-        ?>
-        <tr>
-            <td><?= $p['month'] ?></td>
-            <td><?= number_format($p['principal'], 2, ',', '.') ?></td>
-            <td><?= number_format($p['interest'], 2, ',', '.') ?></td>
-            <td><?= number_format($p['balance'], 2, ',', '.') ?></td>
-            <td><?= $p['due_date'] ?></td>
-            <td><?= number_format($total, 2, ',', '.') ?></td> <!-- valor total -->
-        </tr>
+        <thead>
+            <tr>
+                <th>Mês</th>
+                <th>Amortização (R$)</th>
+                <th>Juros (R$)</th>
+                <th>Saldo (R$)</th>
+                <th>Vencimento</th>
+                <th>Total a pagar (R$)</th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($parcelas as $p): ?>
+            <tr>
+                <td><?= $p['month'] ?></td>
+                <td><?= number_format($p['amortization'], 2, ',', '.') ?></td>
+                <td><?= number_format($p['interest'], 2, ',', '.') ?></td>
+                <td><?= number_format($p['balance'], 2, ',', '.') ?></td>
+                <td><?= $p['due_date'] ?></td>
+                <td><?= number_format($p['installment'], 2, ',', '.') ?></td>
+            </tr>
         <?php endforeach; ?>
+        </tbody>
     </table>
 <?php endif; ?>
 

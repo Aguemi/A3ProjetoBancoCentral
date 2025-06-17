@@ -149,7 +149,7 @@ include '../conexao.php';
     <h2>📆 Parcelas</h2>
     <table>
         <tr>
-            <th>ID</th><th>Mês</th><th>Principal</th><th>Juros (%)</th><th>Saldo</th><th>Vencimento</th><th>Empréstimo</th><th>Parcela Total</th><th>Ações</th>
+            <th>ID</th><th>Mês</th><th>Principal</th><th>Juros (R$ e %)</th><th>Saldo</th><th>Vencimento</th><th>Empréstimo</th><th>Parcela Total</th><th>Ações</th>
         </tr>
         <?php
         $parcelas = $pdo->query("
@@ -157,18 +157,23 @@ include '../conexao.php';
             FROM installment i
             LEFT JOIN loan l ON l.id = i.loan_id
         ")->fetchAll();
+
         foreach ($parcelas as $p) {
             $id = $p['id'];
             $month = $p['month_number'];
             $principal_valor = $p['principal'];
-            $juros_percentual = $p['interest_rate'];
-            $juros_valor = $principal_valor * ($juros_percentual / 100);
+
+            // Valor do juros em reais já salvo no banco - ajuste o nome do campo se necessário
+            $juros_valor = isset($p['interest']) ? $p['interest'] : 0;
+
+            $juros_percentual = $p['interest_rate']; 
             $balance = $p['balance'];
             $due_date = $p['due_date'];
             $loan_id = $p['loan_id'];
             $total_parcela = $principal_valor + $juros_valor;
 
             $principal = number_format($principal_valor, 2, ',', '.');
+            $juros_real = number_format($juros_valor, 2, ',', '.');
             $juros_percent = number_format($juros_percentual, 2, ',', '.');
             $saldo = number_format($balance, 2, ',', '.');
             $total_parcela_formatado = number_format($total_parcela, 2, ',', '.');
@@ -177,7 +182,7 @@ include '../conexao.php';
                     <td>{$id}</td>
                     <td>{$month}</td>
                     <td>R$ {$principal}</td>
-                    <td>{$juros_percent} %</td>
+                    <td>R$ {$juros_real} ({$juros_percent} %)</td>
                     <td>R$ {$saldo}</td>
                     <td>{$due_date}</td>
                     <td>{$loan_id}</td>

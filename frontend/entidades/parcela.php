@@ -1,65 +1,78 @@
 <?php
-// Mostrar erros para ajudar no debug
+// Ativa erros para debug
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $mes = (int)$_POST['month_number'];
-    $principal = (float)$_POST['principal'];
-    $juros = (float)$_POST['interest'];
-    $saldo = (float)$_POST['balance'];
-    $dataVencimento = $_POST['due_date'];
-    $loanId = (int)$_POST['loan_id'];
+    $amount = floatval($_POST['amount']);
+    $interestRate = floatval($_POST['interest_rate']) / 100; // Ex: 5% vira 0.05
+    $months = intval($_POST['months']);
+    $startDate = new DateTime($_POST['start_date']);
+    $loanId = intval($_POST['loan_id']);
 
-    // Montar array para JSON
-    $data = [
-        'monthNumber' => $mes,
-        'principal' => $principal,
-        'interest' => $juros,
-        'balance' => $saldo,
-        'dueDate' => $dataVencimento,
-        'loan' => ['id' => $loanId]  // loan como objeto com id
-    ];
-
-    $jsonData = json_encode($data);
-
-    // 🔁 🔧 ALTERE AQUI para o endpoint correto do seu backend Spring Boot para parcelas
-    $url = 'http://localhost:8080/api/installments';
-
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
-
-    $response = curl_exec($ch);
-
-    if (curl_errno($ch)) {
-        echo "❌ Erro ao enviar para o Spring Boot: " . curl_error($ch);
+    // Calculo da parcela fixa PRICE
+    if ($interestRate == 0) {
+        $pmt = round($amount / $months, 2);
     } else {
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($httpCode === 200 || $httpCode === 201) {
-            $responseData = json_decode($response, true);
-
-            echo "<h2>✅ Parcela cadastrada com sucesso!</h2>";
-            echo "<strong>ID:</strong> " . ($responseData['id'] ?? 'N/A') . "<br>";
-            echo "<strong>Mês:</strong> " . ($responseData['monthNumber'] ?? 'N/A') . "<br>";
-            echo "<strong>Principal:</strong> " . ($responseData['principal'] ?? 'N/A') . "<br>";
-            echo "<strong>Juros:</strong> " . ($responseData['interest'] ?? 'N/A') . "<br>";
-            echo "<strong>Saldo:</strong> " . ($responseData['balance'] ?? 'N/A') . "<br>";
-            echo "<strong>Data de Vencimento:</strong> " . ($responseData['dueDate'] ?? 'N/A') . "<br>";
-            echo "<strong>ID Empréstimo:</strong> " . ($responseData['loan']['id'] ?? 'N/A') . "<br><br>";
-            echo "<a href='../index.php'>🔙 Voltar</a>";
-        } else {
-            echo "❌ Erro na resposta do Spring Boot (HTTP $httpCode):<br>";
-            echo "<pre>" . htmlspecialchars($response) . "</pre>";
-        }
+        $pmt = round(($amount * $interestRate) / (1 - pow(1 + $interestRate, -$months)), 2);
     }
 
-    curl_close($ch);
+    $balance = $amount;
+
+    for ($month = 1; $month <= $months; $month++) {
+        $interest = round($balance * $interestRate, 2);
+        $principal = round($pmt - $interest, 2);
+        $balance = round($balance - $principal, 2);
+
+        // Ajuste para última parcela evitar erros de arredondamento
+        if ($month == $months && abs($balance) > 0.01) {
+            $principal += $balance;
+            $balance = 0;
+        }
+
+        $totalInstallment = round($principal + $interest, 2);
+
+        $dueDate = (clone $startDate)->modify("+$month month")->format('Y-m-d');
+
+        $data = [
+            'monthNumber' => $month,
+            'principal' => $principal,
+            'interest' => $interest,
+            'totalInstallment' => $totalInstallment, // NOVO campo
+            'balance' => $balance,
+            'dueDate' => $dueDate,
+            'loan' => ['id' => $loanId]
+        ];
+
+        $jsonData = json_encode($data);
+
+        $url = 'http://localhost:8080/api/installments';
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+
+        $response = curl_exec($ch);
+
+        if (curl_errno($ch)) {
+            echo "❌ Erro ao enviar parcela $month: " . curl_error($ch) . "<br>";
+        } else {
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($httpCode === 200 || $httpCode === 201) {
+                echo "✅ Parcela $month cadastrada com sucesso.<br>";
+            } else {
+                echo "❌ Erro na resposta para parcela $month (HTTP $httpCode): $response<br>";
+            }
+        }
+
+        curl_close($ch);
+    }
+
+    echo '<a href="../index.php">🔙 Voltar</a>';
 }
 ?>
